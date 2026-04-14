@@ -7,15 +7,14 @@ import type { Creator } from "@/lib/types";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const category = searchParams.get("category");
-  let creators = readCreators();
+  let creators = await readCreators();
   if (category) creators = creators.filter((c) => c.category === category);
   return NextResponse.json(creators);
 }
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const creators = readCreators();
-
+  const creators = await readCreators();
   const newCreator: Creator = {
     id: uuid(),
     username: body.username,
@@ -26,15 +25,11 @@ export async function POST(request: Request) {
     avgViews30d: 0,
     lastScrapedAt: "",
   };
-
-  // Scrape stats in the background — save immediately, then update
   creators.push(newCreator);
-  writeCreators(creators);
-
-  // Try to scrape stats (non-blocking for the response)
+  await writeCreators(creators);
   try {
     const stats = await scrapeCreatorStats(body.username);
-    const updated = readCreators();
+    const updated = await readCreators();
     const idx = updated.findIndex((c) => c.id === newCreator.id);
     if (idx !== -1) {
       updated[idx] = {
@@ -45,23 +40,22 @@ export async function POST(request: Request) {
         avgViews30d: stats.avgViews30d,
         lastScrapedAt: new Date().toISOString(),
       };
-      writeCreators(updated);
+      await writeCreators(updated);
       return NextResponse.json(updated[idx], { status: 201 });
     }
   } catch (err) {
     console.error(`Failed to scrape stats for @${body.username}:`, err);
   }
-
   return NextResponse.json(newCreator, { status: 201 });
 }
 
 export async function PUT(request: Request) {
   const body = await request.json();
-  const creators = readCreators();
+  const creators = await readCreators();
   const index = creators.findIndex((c) => c.id === body.id);
   if (index === -1) return NextResponse.json({ error: "Not found" }, { status: 404 });
   creators[index] = { ...creators[index], ...body };
-  writeCreators(creators);
+  await writeCreators(creators);
   return NextResponse.json(creators[index]);
 }
 
@@ -69,8 +63,8 @@ export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  const creators = readCreators();
+  const creators = await readCreators();
   const filtered = creators.filter((c) => c.id !== id);
-  writeCreators(filtered);
+  await writeCreators(filtered);
   return NextResponse.json({ success: true });
 }
