@@ -91,7 +91,9 @@ export async function runPipeline(
 
     progress.phase = "scraping";
     const cutoffDate = new Date(Date.now() - params.nDays * 24 * 60 * 60 * 1000);
-    const allVideos: ScrapedVideo[] = [];
+
+    // 크리에이터당 조회수 1위 영상 수집
+    const topPerCreator: ScrapedVideo[] = [];
 
     const scrapeResults = await Promise.allSettled(
       creators.map(async (creator) => {
@@ -116,21 +118,24 @@ export async function runPipeline(
           }))
           .filter((v) => v.timestamp >= cutoffDate);
 
-        updateTask(taskId, `Found ${videos.length} recent videos`);
-        log(`@${creator.username}: ${reels.length} reels → ${videos.length} recent`);
+        videos.sort((a, b) => b.views - a.views);
 
+        // 크리에이터당 1위 영상만
+        const top1 = videos.slice(0, 1);
+
+        log(`@${creator.username}: ${reels.length} reels → top 1 selected (${top1[0]?.views.toLocaleString() || 0} views)`);
         removeTask(taskId);
         progress.creatorsScraped++;
         emit();
 
-        return { creator: creator.username, videos };
+        return { creator: creator.username, videos: top1 };
       })
     );
 
     for (const result of scrapeResults) {
       if (result.status === "fulfilled") {
         for (const v of result.value.videos) {
-          allVideos.push(v);
+          topPerCreator.push(v);
         }
         progress.creatorsCompleted++;
       } else {
@@ -141,18 +146,18 @@ export async function runPipeline(
       }
     }
 
-    // 전체 영상 중 조회수 상위 10개만 선별
-    allVideos.sort((a, b) => b.views - a.views);
-    const topVideos = allVideos.slice(0, 10);
+    // 전체 중 조회수 상위 10개
+    topPerCreator.sort((a, b) => b.views - a.views);
+    const finalVideos = topPerCreator.slice(0, 10);
 
-    progress.videosTotal = topVideos.length;
-    log(`전체 ${allVideos.length}개 중 조회수 상위 ${topVideos.length}개 선별`);
+    progress.videosTotal = finalVideos.length;
+    log(`크리에이터별 1위 영상 ${topPerCreator.length}개 중 조회수 상위 ${finalVideos.length}개 분석`);
     emit();
 
     progress.phase = "analyzing";
     emit();
 
-    await runWithConcurrency(topVideos, VIDEO_CONCURRENCY, async (video) => {
+    await runWithConcurrency(finalVideos, VIDEO_CONCURRENCY, async (video) => {
       const taskId = `video-${uuid().slice(0, 8)}`;
       const label = `${video.views.toLocaleString()} views`;
 
