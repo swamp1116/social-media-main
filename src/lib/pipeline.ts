@@ -91,7 +91,7 @@ export async function runPipeline(
 
     progress.phase = "scraping";
     const cutoffDate = new Date(Date.now() - params.nDays * 24 * 60 * 60 * 1000);
-    const allTopVideos: ScrapedVideo[] = [];
+    const allVideos: ScrapedVideo[] = [];
 
     const scrapeResults = await Promise.allSettled(
       creators.map(async (creator) => {
@@ -116,24 +116,21 @@ export async function runPipeline(
           }))
           .filter((v) => v.timestamp >= cutoffDate);
 
-        videos.sort((a, b) => b.views - a.views);
-        const topVideos = videos.slice(0, params.topK);
-
-        updateTask(taskId, `Top ${topVideos.length} selected`);
-        log(`@${creator.username}: ${reels.length} reels → top ${topVideos.length} selected`);
+        updateTask(taskId, `Found ${videos.length} recent videos`);
+        log(`@${creator.username}: ${reels.length} reels → ${videos.length} recent`);
 
         removeTask(taskId);
         progress.creatorsScraped++;
         emit();
 
-        return { creator: creator.username, videos: topVideos };
+        return { creator: creator.username, videos };
       })
     );
 
     for (const result of scrapeResults) {
       if (result.status === "fulfilled") {
         for (const v of result.value.videos) {
-          allTopVideos.push(v);
+          allVideos.push(v);
         }
         progress.creatorsCompleted++;
       } else {
@@ -144,14 +141,18 @@ export async function runPipeline(
       }
     }
 
-    progress.videosTotal = allTopVideos.length;
-    log(`Scraping done. ${allTopVideos.length} videos to analyze (${VIDEO_CONCURRENCY} workers)`);
+    // 전체 영상 중 조회수 상위 10개만 선별
+    allVideos.sort((a, b) => b.views - a.views);
+    const topVideos = allVideos.slice(0, 10);
+
+    progress.videosTotal = topVideos.length;
+    log(`전체 ${allVideos.length}개 중 조회수 상위 ${topVideos.length}개 선별`);
     emit();
 
     progress.phase = "analyzing";
     emit();
 
-    await runWithConcurrency(allTopVideos, VIDEO_CONCURRENCY, async (video) => {
+    await runWithConcurrency(topVideos, VIDEO_CONCURRENCY, async (video) => {
       const taskId = `video-${uuid().slice(0, 8)}`;
       const label = `${video.views.toLocaleString()} views`;
 
