@@ -1,5 +1,5 @@
 import { v4 as uuid } from "uuid";
-import { readConfigs, readCreators, readVideos, writeVideos } from "./csv";
+import { readConfigs, readCreators, appendVideo } from "./csv";
 import { scrapeReels } from "./apify";
 import { uploadVideo, analyzeVideo } from "./gemini";
 import { generateNewConcepts } from "./claude";
@@ -151,8 +151,6 @@ export async function runPipeline(
     progress.phase = "analyzing";
     emit();
 
-    const newVideos: Video[] = [];
-
     await runWithConcurrency(allTopVideos, VIDEO_CONCURRENCY, async (video) => {
       const taskId = `video-${uuid().slice(0, 8)}`;
       const label = `${video.views.toLocaleString()} views`;
@@ -200,7 +198,7 @@ export async function runPipeline(
           starred: false,
         };
 
-        newVideos.push(videoRecord);
+        await appendVideo(videoRecord);
         progress.videosAnalyzed++;
         removeTask(taskId);
         log(`@${video.username} (${label}): done`);
@@ -213,11 +211,6 @@ export async function runPipeline(
         emit();
       }
     });
-
-    if (newVideos.length > 0) {
-      const existing = await readVideos();
-      await writeVideos([...existing, ...newVideos]);
-    }
 
     progress.phase = "done";
     progress.status = "completed";
