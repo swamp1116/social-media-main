@@ -1,11 +1,10 @@
 import { runPipeline } from "@/lib/pipeline";
 import type { PipelineParams } from "@/lib/types";
 
-export const maxDuration = 300;
+export const maxDuration = 800;
 
 export async function POST(request: Request) {
   const params: PipelineParams = await request.json();
-
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
@@ -32,7 +31,6 @@ export async function POST(request: Request) {
       }
     },
   });
-
   return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
