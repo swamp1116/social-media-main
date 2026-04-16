@@ -69,12 +69,12 @@ export async function readVideos(): Promise<Video[]> {
     views: r.views || 0,
     likes: r.likes || 0,
     comments: r.comments || 0,
-    analysis: r.analysis ? JSON.stringify(r.analysis) : "",
-    newConcepts: "",
+    analysis: typeof r.analysis === "string" ? r.analysis : JSON.stringify(r.analysis || ""),
+    newConcepts: r.new_concepts || "",
     datePosted: r.scraped_at || "",
     dateAdded: r.scraped_at || "",
-    configName: "",
-    starred: false,
+    configName: r.config_name || "",
+    starred: r.starred || false,
   }));
 }
 
@@ -88,7 +88,10 @@ export async function writeVideos(videos: Video[]) {
       views: v.views,
       likes: v.likes,
       comments: v.comments,
-      analysis: v.analysis ? JSON.parse(v.analysis) : null,
+      analysis: v.analysis,
+      new_concepts: v.newConcepts,
+      config_name: v.configName,
+      starred: v.starred,
     });
   }
 }
@@ -102,6 +105,9 @@ export async function appendVideo(video: Video) {
     views: video.views,
     likes: video.likes,
     comments: video.comments,
-    analysis: video.analysis ? JSON.parse(video.analysis) : null,
+    analysis: video.analysis,
+    new_concepts: video.newConcepts,
+    config_name: video.configName,
+    starred: video.starred,
   });
 }
